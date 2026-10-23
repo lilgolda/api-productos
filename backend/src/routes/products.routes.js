@@ -2,6 +2,7 @@ import { Router } from "express";
 import mongoose from "mongoose";
 import { Product } from "../models/product.model.js";
 import { productSchema } from "../schemas/product.schema.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
@@ -23,7 +24,7 @@ function validateId(req, res, next) {
   next();
 }
 
-router.post("/", validate, async (req, res) => {
+router.post("/", requireAuth, validate, async (req, res) => {
   const product = await Product.create(req.body);
   res.status(201).json(product);
 });
