@@ -1,0 +1,90 @@
+# Levanta todo con:  docker compose up --build
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit
+      RABBITMQ_DEFAULT_PASS: rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672" # panel web: http://localhost:15672 (usuario rabbit / clave rabbit)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # Base de datos propia del auth-service (usuarios)
+  mongo-auth:
+    image: mongo:7
+    volumes:
+      - mongo-auth-data:/data/db
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+
+  # Base de datos propia del catalog-service (productos)
+  mongo-catalog:
+    image: mongo:7
+    volumes:
+      - mongo-catalog-data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      MONGODB_URI: mongodb://mongo-auth:27017/auth_db
+      RABBITMQ_URL: amqp://rabbit:rabbit@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-clave-de-desarrollo-cambiala-en-el-archivo-env}
+    depends_on:
+      mongo-auth:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  catalog-service:
+    build: ./catalog-service
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo-catalog:27017/catalog_db
+      RABBITMQ_URL: amqp://rabbit:rabbit@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-clave-de-desarrollo-cambiala-en-el-archivo-env}
+    depends_on:
+      mongo-catalog:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_AUTH_URL: http://localhost:4000
+        VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:80"
+    depends_on:
+      - auth-service
+      - catalog-service
+
+volumes:
+  mongo-auth-data:
+  mongo-catalog-data:
