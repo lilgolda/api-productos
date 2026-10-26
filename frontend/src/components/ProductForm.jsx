@@ -1,33 +1,11 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createProduct } from "../api.js";
-import { productSchema } from "../schemas.js";
+import { useCreateProduct } from "../hooks/useCreateProduct.js";
 
 export default function ProductForm({ onUnauthorized }) {
-  const queryClient = useQueryClient();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm({ resolver: zodResolver(productSchema) });
-
-  const mutation = useMutation({
-    mutationFn: createProduct,
-    onSuccess: () => {
-      // Refresca la lista y limpia el formulario
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      reset();
-    },
-    onError: (error) => {
-      // Si el token venció o es inválido, volvemos al login
-      if (error.status === 401) onUnauthorized();
-    },
-  });
+  const { register, errors, onSubmit, isPending, isError, isSuccess, errorMessage } =
+    useCreateProduct(onUnauthorized);
 
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+    <form onSubmit={onSubmit}>
       <h2>Nuevo producto</h2>
 
       <label>
@@ -48,11 +26,11 @@ export default function ProductForm({ onUnauthorized }) {
         {errors.stock && <span className="error">{errors.stock.message}</span>}
       </label>
 
-      {mutation.isError && <p className="error">{mutation.error.message}</p>}
-      {mutation.isSuccess && <p className="ok">Producto creado</p>}
+      {isError && <p className="error">{errorMessage}</p>}
+      {isSuccess && <p className="ok">Producto creado</p>}
 
-      <button type="submit" disabled={mutation.isPending}>
-        {mutation.isPending ? "Guardando..." : "Crear producto"}
+      <button type="submit" disabled={isPending}>
+        {isPending ? "Guardando..." : "Crear producto"}
       </button>
     </form>
   );

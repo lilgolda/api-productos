@@ -1,26 +1,11 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { login, saveToken } from "../api.js";
-import { loginSchema } from "../schemas.js";
+import { useLogin } from "../hooks/useLogin.js";
 
 export default function LoginForm({ onLogin }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({ resolver: zodResolver(loginSchema) });
-
-  const mutation = useMutation({
-    mutationFn: login,
-    onSuccess: ({ token }) => {
-      saveToken(token);
-      onLogin();
-    },
-  });
+  const { register, errors, onSubmit, isPending, isError, errorMessage } =
+    useLogin(onLogin);
 
   return (
-    <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+    <form onSubmit={onSubmit}>
       <h2>Iniciar sesión</h2>
 
       <label>
@@ -35,10 +20,10 @@ export default function LoginForm({ onLogin }) {
         {errors.password && <span className="error">{errors.password.message}</span>}
       </label>
 
-      {mutation.isError && <p className="error">{mutation.error.message}</p>}
+      {isError && <p className="error">{errorMessage}</p>}
 
-      <button type="submit" disabled={mutation.isPending}>
-        {mutation.isPending ? "Entrando..." : "Entrar"}
+      <button type="submit" disabled={isPending}>
+        {isPending ? "Entrando..." : "Entrar"}
       </button>
     </form>
   );

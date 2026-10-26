@@ -1,15 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
-import { getProducts } from "../api.js";
+import { useProducts } from "../hooks/useProducts.js";
 
 export default function ProductList() {
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["products"],
-    queryFn: getProducts,
-  });
+  const { products, isLoading, isError, errorMessage } = useProducts();
 
   if (isLoading) return <p>Cargando productos...</p>;
-  if (isError) return <p className="error">Error: {error.message}</p>;
-  if (data.length === 0) return <p>Todavía no hay productos.</p>;
+  if (isError) return <p className="error">Error: {errorMessage}</p>;
+  if (products.length === 0) return <p>Todavía no hay productos.</p>;
 
   return (
     <table>
@@ -21,7 +17,7 @@ export default function ProductList() {
         </tr>
       </thead>
       <tbody>
-        {data.map((product) => (
+        {products.map((product) => (
           <tr key={product._id}>
             <td>{product.name}</td>
             <td>${product.price}</td>
