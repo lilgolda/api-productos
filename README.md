@@ -1,24 +1,72 @@
-# API de productos
+# API de productos (microservicios)
 
-API REST con Express, Zod y MongoDB (Mongoose).
+Dos servicios de backend independientes, cada uno con su propia base de datos, que se comunican por RabbitMQ, más un frontend en React. Todo se levanta con Docker.
 
-1. Entra a la carpeta backend e instala dependencias: `cd backend && npm install`
-2. Crea un archivo `.env` (pudes copiar `.env.example`) con `PORT=3000` y `MONGODB_URI=<tu cadena de conexión>`
-3. Levanta el servidor con `npm run dev` y probalo en http://localhost:3000/products
+## Levantar el proyecto
 
+1. Instalá y abrí Docker Desktop.
+2. (Opcional) Copiá `.env.example` a `.env` y cambiá `JWT_SECRET`. Si no lo hacés, usa una clave de desarrollo.
+3. En la raíz del repo: `docker compose up --build`
 
-# API de productos + frontend
+| Qué | Dirección |
+|---|---|
+| Frontend | http://localhost:5173 |
+| auth-service (login) | http://localhost:4000 |
+| catalog-service (productos) | http://localhost:3000 |
+| Panel de RabbitMQ | http://localhost:15672 (usuario `rabbit`, clave `rabbit`) |
 
-Backend (Express, Zod, MongoDB/Mongoose, JWT) en `backend/` y frontend (React + Vite) en `frontend/`.
+Usuario de prueba: `admin` / `1234`. Para apagar todo: `docker compose down` (agregá `-v` para borrar también las bases de datos).
 
-1. Backend: `cd backend && npm install`, creá `.env` copiando `.env.example` (con tu `MONGODB_URI` y un `JWT_SECRET`) y corré `npm run dev` (puerto 3000).
-2. Frontend: `cd frontend && npm install && npm run dev` y abrí http://localhost:5173.
-3. Login de prueba: usuario `admin`, contraseña `1234`. Sin token, `POST /products` responde 401.
+## Arquitectura
 
-## Refactor de arquitectura (Tarea 3)
+```
+                 POST /login                        +--------------+
+            +--------------------->  auth-service  | mongo-auth   |
+            |                        (puerto 4000) | auth_db      |
+ Frontend --+                              ^        +--------------+
+ (React)    |                              | evento product.created
+            |                          RabbitMQ
+            |  GET/POST /products          ^
+            +--------------------->  catalog-service +--------------+
+               (con Bearer JWT)      (puerto 3000)   | mongo-catalog|
+                                                     | catalog_db   |
+                                                     +--------------+
+```
 
-No se agregó funcionalidad: se reorganizó el código para separar responsabilidades. La API y la pantalla se comportan igual que antes.
+segun yo quedo asi mismo el diseño y el funcionamiento pero si algo llega a fallar hay que rezar por que es en base de docker 
 
-**Backend: por dominio y en capas.** Los archivos ya no se agrupan por tipo (`routes/`, `models/`...) sino por tema: `src/products/`, `src/auth/` y `src/shared/`. Dentro de `products/` el flujo es `product.routes.js` (recibe el request) → `product.service.js` (casos de uso) → `product.repository.js` (habla con MongoDB). El servicio no importa Express ni Mongoose: recibe el repositorio desde `index.js`, que arma las capas. Así la lógica se puede probar sin base de datos (`cd backend && npm test`) y cambiar de base solo obliga a tocar el repositorio.
+- **auth-service**: login, emisión del JWT y usuarios. Su base de datos (`auth_db`) está en el contenedor `mongo-auth`.
+- **catalog-service**: CRUD de productos. Su base de datos (`catalog_db`) está en el contenedor `mongo-catalog`. Comprueba el JWT por su cuenta con la clave compartida, sin llamar al auth-service.
+- **Comunicación (RabbitMQ)**: cuando el catálogo crea un producto publica el evento `product.created`. El auth-service lo recibe y suma 1 al contador `productsCreated` del usuario que lo creó. Si RabbitMQ falla, el producto se crea igual.
 
-**Frontend: componente + hook.** La lógica (llamadas a la API, formularios, validación, estados de carga y error) pasó a hooks en `src/hooks/`: `useProducts`, `useCreateProduct`, `useLogin` y `useAuth`. Los componentes solo muestran la interfaz, lo que los hace más simples de leer y de reutilizar.
+Los servicios no comparten base de datos ni colecciones: solo se pasan eventos.
+
+### Probar la comunicación (PowerShell)
+
+```powershell
+$r = Invoke-RestMethod -Method Post -Uri http://localhost:4000/login -ContentType "application/json" -Body '{"username":"admin","password":"1234"}'
+$token = $r.token
+
+# 1) Crear un producto en el catálogo
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/products -Headers @{Authorization="Bearer $token"} -ContentType "application/json" -Body '{"name":"Teclado","price":45.5,"stock":10}'
+
+# 2) Ver el contador en el auth-service (sube de a 1 por producto creado)
+Invoke-RestMethod -Uri http://localhost:4000/me -Headers @{Authorization="Bearer $token"}
+```
+
+Sin token, `POST /products` responde 401.
+
+## Estructura y por qué
+
+```
+auth-service/      login, usuarios y consumidor de eventos
+catalog-service/   productos y publicador de eventos
+frontend/          React + Vite
+docker-compose.yml
+```
+
+Dentro de cada servicio el código está agrupado por dominio y en capas: rutas (reciben el request) → servicio (casos de uso, sin Express, Mongoose ni RabbitMQ) → repositorio (habla con la base de datos). Las dependencias se arman en `src/index.js`, así la lógica se prueba sin base de datos: `npm test` dentro de cada servicio. En el frontend la lógica vive en hooks (`src/hooks/`) y los componentes solo muestran la interfaz.
+
+## Sin Docker (opcional)
+
+Hace falta MongoDB (dos bases) y RabbitMQ corriendo. En cada servicio: copia `.env.example` a `.env`, `npm install` y `npm run dev`. En `frontend`: `npm install` y `npm run dev`.
