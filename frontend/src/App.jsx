@@ -1,16 +1,10 @@
-import { useState } from "react";
-import { clearToken, getToken } from "./api.js";
+import { useAuth } from "./hooks/useAuth.js";
 import LoginForm from "./components/LoginForm.jsx";
 import ProductForm from "./components/ProductForm.jsx";
 import ProductList from "./components/ProductList.jsx";
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
-
-  function logout() {
-    clearToken();
-    setLoggedIn(false);
-  }
+  const { loggedIn, onLoggedIn, logout } = useAuth();
 
   return (
     <main>
@@ -22,7 +16,7 @@ export default function App() {
       {loggedIn ? (
         <ProductForm onUnauthorized={logout} />
       ) : (
-        <LoginForm onLogin={() => setLoggedIn(true)} />
+        <LoginForm onLogin={onLoggedIn} />
       )}
 
       <h2>Lista de productos</h2>
