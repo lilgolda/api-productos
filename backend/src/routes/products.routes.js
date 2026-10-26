@@ -6,7 +6,6 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
-// Valida el body; si falla responde 400 con el detalle
 function validate(req, res, next) {
   const result = productSchema.safeParse(req.body);
   if (!result.success) {
@@ -16,7 +15,6 @@ function validate(req, res, next) {
   next();
 }
 
-// Valida que el :id tenga formato de MongoDB
 function validateId(req, res, next) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ error: "ID inválido" });

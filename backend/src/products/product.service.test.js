@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createProductService } from "./product.service.js";
 import { NotFoundError } from "../shared/errors.js";
 
-// Repositorio falso en memoria: prueba la lógica sin base de datos
 function fakeRepository() {
   const items = new Map();
   let counter = 0;

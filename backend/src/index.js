@@ -8,7 +8,6 @@ import { createProductRouter } from "./products/product.routes.js";
 import authRouter from "./auth/auth.routes.js";
 import { errorHandler } from "./shared/error-handler.js";
 
-// Armado de las capas: repositorio -> servicio (casos de uso) -> rutas
 const productService = createProductService(productRepository);
 
 const app = express();

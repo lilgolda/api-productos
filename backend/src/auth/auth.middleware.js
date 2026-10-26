@@ -1,6 +1,5 @@
 import { verifyToken } from "./auth.service.js";
 
-// Exige un header "Authorization: Bearer <token>" con un JWT válido
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const [type, token] = header.split(" ");

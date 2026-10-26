@@ -2,11 +2,9 @@ import { Router } from "express";
 import { productSchema } from "./product.schema.js";
 import { requireAuth } from "../auth/auth.middleware.js";
 
-// Capa HTTP: recibe el request, llama al caso de uso y arma la respuesta.
 export function createProductRouter(service) {
   const router = Router();
 
-  // Valida el body; si falla responde 400 con el detalle
   function validate(req, res, next) {
     const result = productSchema.safeParse(req.body);
     if (!result.success) {
@@ -16,7 +14,6 @@ export function createProductRouter(service) {
     next();
   }
 
-  // Valida que el :id tenga formato válido
   function validateId(req, res, next) {
     if (!service.isValidId(req.params.id)) {
       return res.status(400).json({ error: "ID inválido" });

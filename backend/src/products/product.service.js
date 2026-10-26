@@ -1,7 +1,5 @@
 import { NotFoundError } from "../shared/errors.js";
 
-// Casos de uso de productos.
-// No importa express ni mongoose: recibe el repositorio desde afuera.
 export function createProductService(repository) {
   return {
     isValidId: (id) => repository.isValidId(id),

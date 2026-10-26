@@ -4,7 +4,6 @@ import { z } from "zod";
 
 const router = Router();
 
-// Usuario fijo para esta etapa del curso
 const USER = "admin";
 const PASSWORD = "1234";
 
