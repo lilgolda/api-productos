@@ -1,58 +1,94 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import bcrypt from "bcryptjs";
 import { createAuthService } from "./auth.service.js";
 import { InvalidCredentialsError, NotFoundError } from "../shared/errors.js";
 
-process.env.JWT_SECRET = "secreto-de-prueba";
+// Test unitario: el caso de uso se prueba con un repositorio "mock". No hay base de datos.
+describe("auth.service", () => {
+  let repository;
+  let service;
+  let adminHash;
 
-function fakeRepository() {
-  const users = new Map();
-  return {
-    findByUsername: async (username) => users.get(username) ?? null,
-    create: async (data) => {
-      const user = { productsCreated: 0, ...data };
-      users.set(user.username, user);
-      return user;
-    },
-    incrementProductsCreated: async (username) => {
-      const user = users.get(username);
-      if (user) user.productsCreated += 1;
-    },
-  };
-}
+  beforeAll(async () => {
+    adminHash = await bcrypt.hash("1234", 4); // costo bajo: solo para que el test sea rápido
+  });
 
-test("crea el usuario admin una sola vez", async () => {
-  const repo = fakeRepository();
-  const service = createAuthService(repo);
-  await service.ensureDefaultUser();
-  await service.ensureDefaultUser();
-  const profile = await service.getProfile("admin");
-  assert.equal(profile.username, "admin");
-});
+  beforeEach(() => {
+    repository = {
+      findByUsername: vi.fn(),
+      create: vi.fn(),
+      incrementProductsCreated: vi.fn(),
+    };
+    service = createAuthService(repository);
+  });
 
-test("login correcto devuelve un JWT con el usuario", async () => {
-  const service = createAuthService(fakeRepository());
-  await service.ensureDefaultUser();
-  const token = await service.login({ username: "admin", password: "1234" });
-  assert.equal(service.verifyToken(token).username, "admin");
-});
+  describe("ensureDefaultUser", () => {
+    it("crea el usuario admin con la clave cifrada si no existe", async () => {
+      repository.findByUsername.mockResolvedValue(null);
 
-test("login con datos incorrectos lanza InvalidCredentialsError", async () => {
-  const service = createAuthService(fakeRepository());
-  await service.ensureDefaultUser();
-  await assert.rejects(() => service.login({ username: "admin", password: "mal" }), InvalidCredentialsError);
-  await assert.rejects(() => service.login({ username: "nadie", password: "1234" }), InvalidCredentialsError);
-});
+      await service.ensureDefaultUser();
 
-test("registerProductCreated suma uno al contador del usuario", async () => {
-  const service = createAuthService(fakeRepository());
-  await service.ensureDefaultUser();
-  await service.registerProductCreated("admin");
-  await service.registerProductCreated("admin");
-  assert.equal((await service.getProfile("admin")).productsCreated, 2);
-});
+      expect(repository.create).toHaveBeenCalledTimes(1);
+      const saved = repository.create.mock.calls[0][0];
+      expect(saved.username).toBe("admin");
+      expect(saved.passwordHash).not.toBe("1234");
+      expect(await bcrypt.compare("1234", saved.passwordHash)).toBe(true);
+    });
 
-test("getProfile falla si el usuario no existe", async () => {
-  const service = createAuthService(fakeRepository());
-  await assert.rejects(() => service.getProfile("nadie"), NotFoundError);
+    it("no hace nada si el usuario ya existe", async () => {
+      repository.findByUsername.mockResolvedValue({ username: "admin" });
+      await service.ensureDefaultUser();
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("login", () => {
+    it("devuelve un JWT con el usuario si las credenciales son correctas", async () => {
+      repository.findByUsername.mockResolvedValue({ username: "admin", passwordHash: adminHash });
+
+      const token = await service.login({ username: "admin", password: "1234" });
+
+      expect(service.verifyToken(token).username).toBe("admin");
+    });
+
+    it("lanza InvalidCredentialsError si la clave es incorrecta", async () => {
+      repository.findByUsername.mockResolvedValue({ username: "admin", passwordHash: adminHash });
+      await expect(service.login({ username: "admin", password: "mal" })).rejects.toBeInstanceOf(InvalidCredentialsError);
+    });
+
+    it("lanza InvalidCredentialsError si el usuario no existe", async () => {
+      repository.findByUsername.mockResolvedValue(null);
+      await expect(service.login({ username: "nadie", password: "1234" })).rejects.toBeInstanceOf(InvalidCredentialsError);
+    });
+  });
+
+  describe("verifyToken", () => {
+    it("rechaza un token inválido", () => {
+      expect(() => service.verifyToken("abc")).toThrow();
+    });
+  });
+
+  describe("getProfile", () => {
+    it("devuelve el usuario y su contador, sin la clave", async () => {
+      repository.findByUsername.mockResolvedValue({ username: "admin", passwordHash: adminHash, productsCreated: 3 });
+      expect(await service.getProfile("admin")).toEqual({ username: "admin", productsCreated: 3 });
+    });
+
+    it("lanza NotFoundError si el usuario no existe", async () => {
+      repository.findByUsername.mockResolvedValue(null);
+      await expect(service.getProfile("nadie")).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe("registerProductCreated", () => {
+    it("suma uno al contador del usuario", async () => {
+      await service.registerProductCreated("admin");
+      expect(repository.incrementProductsCreated).toHaveBeenCalledWith("admin");
+    });
+
+    it("ignora el evento si no trae usuario", async () => {
+      await service.registerProductCreated(undefined);
+      expect(repository.incrementProductsCreated).not.toHaveBeenCalled();
+    });
+  });
 });
