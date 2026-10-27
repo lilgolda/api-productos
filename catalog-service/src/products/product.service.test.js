@@ -1,86 +1,110 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createProductService } from "./product.service.js";
 import { NotFoundError } from "../shared/errors.js";
 
-function fakeRepository() {
-  const items = new Map();
-  let counter = 0;
-  return {
-    isValidId: (id) => typeof id === "string" && id.length > 0,
-    create: async (data) => {
-      const product = { _id: String(++counter), ...data };
-      items.set(product._id, product);
-      return product;
-    },
-    findAll: async () => [...items.values()],
-    findById: async (id) => items.get(id) ?? null,
-    update: async (id, data) => {
-      if (!items.has(id)) return null;
-      const product = { ...items.get(id), ...data };
-      items.set(id, product);
-      return product;
-    },
-    delete: async (id) => {
-      const product = items.get(id) ?? null;
-      items.delete(id);
-      return product;
-    },
-  };
-}
+// Test unitario: el caso de uso se prueba con repositorio, eventos y logger "mock".
+// No hay base de datos, ni RabbitMQ, ni Express.
+describe("product.service", () => {
+  let repository;
+  let events;
+  let logger;
+  let service;
 
-function fakeEvents() {
-  const published = [];
-  return { published, publish: async (key, payload) => published.push({ key, payload }) };
-}
+  beforeEach(() => {
+    repository = {
+      isValidId: vi.fn(),
+      create: vi.fn(),
+      findAll: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    };
+    events = { publish: vi.fn().mockResolvedValue(undefined) };
+    logger = { error: vi.fn() };
+    service = createProductService(repository, events, logger);
+  });
 
-test("crea y lista productos", async () => {
-  const service = createProductService(fakeRepository(), fakeEvents());
-  await service.create({ name: "Teclado", price: 10, stock: 5 }, "admin");
-  const products = await service.list();
-  assert.equal(products.length, 1);
-  assert.equal(products[0].name, "Teclado");
-});
+  describe("create", () => {
+    it("guarda el producto y publica el evento product.created", async () => {
+      const data = { name: "Teclado", price: 45.5, stock: 10 };
+      repository.create.mockResolvedValue({ _id: "abc123", ...data });
 
-test("al crear un producto publica el evento product.created", async () => {
-  const events = fakeEvents();
-  const service = createProductService(fakeRepository(), events);
-  const product = await service.create({ name: "Mouse", price: 5, stock: 2 }, "admin");
-  assert.equal(events.published.length, 1);
-  assert.equal(events.published[0].key, "product.created");
-  assert.equal(events.published[0].payload.createdBy, "admin");
-  assert.equal(events.published[0].payload.productId, product._id);
-});
+      const product = await service.create(data, "admin");
 
-test("si RabbitMQ falla, el producto igual se crea", async () => {
-  const brokenEvents = { publish: async () => { throw new Error("sin conexión"); } };
-  const service = createProductService(fakeRepository(), brokenEvents);
-  const originalError = console.error;
-  console.error = () => {};
-  try {
-    const product = await service.create({ name: "A", price: 1, stock: 1 }, "admin");
-    assert.equal(product.name, "A");
-  } finally {
-    console.error = originalError;
-  }
-});
+      expect(repository.create).toHaveBeenCalledWith(data);
+      expect(product._id).toBe("abc123");
+      expect(events.publish).toHaveBeenCalledWith(
+        "product.created",
+        expect.objectContaining({ productId: "abc123", name: "Teclado", createdBy: "admin" })
+      );
+    });
 
-test("getById lanza NotFoundError si no existe", async () => {
-  const service = createProductService(fakeRepository(), fakeEvents());
-  await assert.rejects(() => service.getById("999"), NotFoundError);
-});
+    it("si RabbitMQ falla, el producto igual se crea y el error se registra", async () => {
+      const data = { name: "Mouse", price: 5, stock: 2 };
+      repository.create.mockResolvedValue({ _id: "m1", ...data });
+      const failure = new Error("sin conexión");
+      events.publish.mockRejectedValue(failure);
 
-test("update cambia los datos y falla si no existe", async () => {
-  const service = createProductService(fakeRepository(), fakeEvents());
-  const created = await service.create({ name: "A", price: 1, stock: 1 }, "admin");
-  const updated = await service.update(created._id, { name: "B", price: 2, stock: 3 });
-  assert.equal(updated.name, "B");
-  await assert.rejects(() => service.update("999", { name: "X", price: 1, stock: 1 }), NotFoundError);
-});
+      const product = await service.create(data, "admin");
 
-test("remove borra el producto y falla si no existe", async () => {
-  const service = createProductService(fakeRepository(), fakeEvents());
-  const created = await service.create({ name: "A", price: 1, stock: 1 }, "admin");
-  await service.remove(created._id);
-  await assert.rejects(() => service.remove(created._id), NotFoundError);
+      expect(product.name).toBe("Mouse");
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: failure, productId: "m1" }),
+        "No se pudo publicar product.created"
+      );
+    });
+
+    it("si guardar en la base falla, no publica ningún evento", async () => {
+      repository.create.mockRejectedValue(new Error("base caída"));
+
+      await expect(service.create({ name: "A", price: 1, stock: 1 }, "admin")).rejects.toThrow("base caída");
+      expect(events.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("list", () => {
+    it("devuelve lo que entrega el repositorio", async () => {
+      repository.findAll.mockResolvedValue([{ _id: "1" }, { _id: "2" }]);
+      expect(await service.list()).toHaveLength(2);
+    });
+  });
+
+  describe("getById", () => {
+    it("devuelve el producto si existe", async () => {
+      repository.findById.mockResolvedValue({ _id: "1", name: "A" });
+      expect((await service.getById("1")).name).toBe("A");
+    });
+
+    it("lanza NotFoundError si no existe", async () => {
+      repository.findById.mockResolvedValue(null);
+      await expect(service.getById("999")).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe("update", () => {
+    it("actualiza y devuelve el producto", async () => {
+      repository.update.mockResolvedValue({ _id: "1", name: "B" });
+      const product = await service.update("1", { name: "B", price: 2, stock: 3 });
+      expect(repository.update).toHaveBeenCalledWith("1", { name: "B", price: 2, stock: 3 });
+      expect(product.name).toBe("B");
+    });
+
+    it("lanza NotFoundError si no existe", async () => {
+      repository.update.mockResolvedValue(null);
+      await expect(service.update("999", { name: "X", price: 1, stock: 1 })).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe("remove", () => {
+    it("borra el producto", async () => {
+      repository.delete.mockResolvedValue({ _id: "1" });
+      await expect(service.remove("1")).resolves.toBeUndefined();
+      expect(repository.delete).toHaveBeenCalledWith("1");
+    });
+
+    it("lanza NotFoundError si no existe", async () => {
+      repository.delete.mockResolvedValue(null);
+      await expect(service.remove("999")).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
 });
