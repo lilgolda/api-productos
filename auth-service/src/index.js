@@ -1,33 +1,26 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
 import mongoose from "mongoose";
 import { userRepository } from "./auth/user.repository.js";
 import { createAuthService } from "./auth/auth.service.js";
-import { createAuthRouter } from "./auth/auth.routes.js";
 import { startProductEventsConsumer } from "./messaging/product-events.consumer.js";
-import { errorHandler } from "./shared/error-handler.js";
+import { createApp } from "./app.js";
+import { logger } from "./shared/logger.js";
 
+// Armado de las capas: repositorio -> servicio -> app / consumidor de eventos
 const authService = createAuthService(userRepository);
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.get("/health", (req, res) => res.json({ status: "ok", service: "auth-service" }));
-app.use(createAuthRouter(authService));
-app.use(errorHandler);
+const app = createApp({ authService });
 
 const PORT = process.env.PORT || 4000;
 
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(async () => {
-    console.log("auth-service conectado a MongoDB");
+    logger.info("Conectado a MongoDB");
     await authService.ensureDefaultUser();
     startProductEventsConsumer({ url: process.env.RABBITMQ_URL, service: authService });
-    app.listen(PORT, () => console.log(`auth-service en http://localhost:${PORT}`));
+    app.listen(PORT, () => logger.info({ port: Number(PORT) }, "auth-service escuchando"));
   })
   .catch((err) => {
-    console.error("Error al iniciar auth-service:", err.message);
+    logger.error({ err }, "Error al iniciar auth-service");
     process.exit(1);
   });
