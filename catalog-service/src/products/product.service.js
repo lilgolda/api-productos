@@ -1,12 +1,17 @@
 import { NotFoundError } from "../shared/errors.js";
 
-export function createProductService(repository, events) {
+// Casos de uso de productos.
+// No importa express, mongoose ni RabbitMQ: recibe repositorio, publicador y logger desde afuera.
+const silentLogger = { error() {} };
+
+export function createProductService(repository, events, logger = silentLogger) {
   return {
     isValidId: (id) => repository.isValidId(id),
 
     async create(data, createdBy) {
       const product = await repository.create(data);
 
+      // Avisamos a los demás servicios. Si RabbitMQ falla, el producto igual queda creado.
       try {
         await events.publish("product.created", {
           productId: String(product._id),
@@ -15,7 +20,7 @@ export function createProductService(repository, events) {
           at: new Date().toISOString(),
         });
       } catch (err) {
-        console.error("No se pudo publicar product.created:", err.message);
+        logger.error({ err, productId: String(product._id) }, "No se pudo publicar product.created");
       }
 
       return product;
