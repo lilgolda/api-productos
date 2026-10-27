@@ -1,0 +1,14 @@
+{
+  "name": "api-productos",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install && npm --prefix auth-service install && npm --prefix catalog-service install && npm --prefix frontend install && npx playwright install chromium",
+    "test": "npm run test:services && npm run test:e2e",
+    "test:services": "npm --prefix auth-service test && npm --prefix catalog-service test",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}
