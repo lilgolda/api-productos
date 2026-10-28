@@ -1,6 +1,7 @@
 import { useProducts } from "../hooks/useProducts.js";
+import ProductRow from "./ProductRow.jsx";
 
-export default function ProductList() {
+export default function ProductList({ onEdit }) {
   const { products, isLoading, isError, errorMessage } = useProducts();
 
   if (isLoading) return <p>Cargando productos...</p>;
@@ -14,15 +15,12 @@ export default function ProductList() {
           <th>Nombre</th>
           <th>Precio</th>
           <th>Stock</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
         {products.map((product) => (
-          <tr key={product._id}>
-            <td>{product.name}</td>
-            <td>${product.price}</td>
-            <td>{product.stock}</td>
-          </tr>
+          <ProductRow key={product._id} product={product} onEdit={onEdit} />
         ))}
       </tbody>
     </table>

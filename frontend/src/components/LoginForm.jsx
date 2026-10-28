@@ -1,8 +1,7 @@
 import { useLogin } from "../hooks/useLogin.js";
 
-export default function LoginForm({ onLogin }) {
-  const { register, errors, onSubmit, isPending, isError, errorMessage } =
-    useLogin(onLogin);
+export default function LoginForm({ onSuccess }) {
+  const { register, errors, onSubmit, isPending, isError, errorMessage } = useLogin(onSuccess);
 
   return (
     <form onSubmit={onSubmit}>
