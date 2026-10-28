@@ -80,3 +80,33 @@ td {
   color: #15803d;
   font-size: 14px;
 }
+
+nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+a {
+  color: #2563eb;
+}
+
+button.secondary {
+  background: #e4e7eb;
+  color: #1f2933;
+}
+
+button.danger {
+  background: #b91c1c;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+td.actions {
+  border-bottom: 1px solid #e4e7eb;
+}

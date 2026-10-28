@@ -1,26 +1,26 @@
-import { useAuth } from "./hooks/useAuth.js";
-import LoginForm from "./components/LoginForm.jsx";
-import ProductForm from "./components/ProductForm.jsx";
-import ProductList from "./components/ProductList.jsx";
+import { Navigate, Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import LoginPage from "./pages/LoginPage.jsx";
+import RegisterPage from "./pages/RegisterPage.jsx";
+import ProductsPage from "./pages/ProductsPage.jsx";
 
 export default function App() {
-  const { loggedIn, onLoggedIn, logout } = useAuth();
-
   return (
-    <main>
-      <header>
-        <h1>Productos</h1>
-        {loggedIn && <button onClick={logout}>Cerrar sesión</button>}
-      </header>
-
-      {loggedIn ? (
-        <ProductForm onUnauthorized={logout} />
-      ) : (
-        <LoginForm onLogin={onLoggedIn} />
-      )}
-
-      <h2>Lista de productos</h2>
-      <ProductList />
-    </main>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/products"
+          element={
+            <ProtectedRoute>
+              <ProductsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/products" replace />} />
+      </Route>
+    </Routes>
   );
 }
