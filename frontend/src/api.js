@@ -1,41 +1,48 @@
-const AUTH_URL = import.meta.env.VITE_AUTH_URL || "http://localhost:4000";
-const CATALOG_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 export const getToken = () => localStorage.getItem("token");
 export const saveToken = (token) => localStorage.setItem("token", token);
 export const clearToken = () => localStorage.removeItem("token");
 
-async function request(baseUrl, path, options = {}) {
-  const res = await fetch(`${baseUrl}${path}`, {
+async function request(path, options = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: { "Content-Type": "application/json", ...options.headers },
   });
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const error = new Error(data.error || "Error en la petición");
+    const error = new Error(data.error || (data.errors ? "Datos inválidos" : "Error en la petición"));
     error.status = res.status;
     throw error;
   }
 
+  if (res.status === 204) return null;
   return res.json();
 }
 
-export function getProducts() {
-  return request(CATALOG_URL, "/products");
-}
+const authHeader = () => ({ Authorization: `Bearer ${getToken()}` });
 
 export function login(credentials) {
-  return request(AUTH_URL, "/login", {
-    method: "POST",
-    body: JSON.stringify(credentials),
-  });
+  return request("/auth/login", { method: "POST", body: JSON.stringify(credentials) });
+}
+
+export function registerUser(data) {
+  return request("/auth/register", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function getProducts() {
+  return request("/products");
 }
 
 export function createProduct(product) {
-  return request(CATALOG_URL, "/products", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: JSON.stringify(product),
-  });
+  return request("/products", { method: "POST", headers: authHeader(), body: JSON.stringify(product) });
+}
+
+export function updateProduct(id, product) {
+  return request(`/products/${id}`, { method: "PUT", headers: authHeader(), body: JSON.stringify(product) });
+}
+
+export function deleteProduct(id) {
+  return request(`/products/${id}`, { method: "DELETE", headers: authHeader() });
 }
