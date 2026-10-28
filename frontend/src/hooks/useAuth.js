@@ -1,16 +1,8 @@
-import { useState } from "react";
-import { clearToken, getToken } from "../api.js";
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext.jsx";
 
-// Estado de sesión: ¿hay token guardado?
 export function useAuth() {
-  const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
-
-  const onLoggedIn = () => setLoggedIn(true);
-
-  const logout = () => {
-    clearToken();
-    setLoggedIn(false);
-  };
-
-  return { loggedIn, onLoggedIn, logout };
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth debe usarse dentro de <AuthProvider>");
+  return context;
 }

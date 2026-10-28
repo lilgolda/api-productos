@@ -1,11 +1,12 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { login, saveToken } from "../api.js";
+import { login as loginRequest } from "../api.js";
 import { loginSchema } from "../schemas.js";
+import { useAuth } from "./useAuth.js";
 
-// Lógica del login: formulario, validación, llamada a la API y guardado del token
-export function useLogin(onLoggedIn) {
+export function useLogin(onSuccess) {
+  const { login } = useAuth();
   const {
     register,
     handleSubmit,
@@ -13,10 +14,10 @@ export function useLogin(onLoggedIn) {
   } = useForm({ resolver: zodResolver(loginSchema) });
 
   const mutation = useMutation({
-    mutationFn: login,
+    mutationFn: loginRequest,
     onSuccess: ({ token }) => {
-      saveToken(token);
-      onLoggedIn();
+      login(token);
+      onSuccess?.();
     },
   });
 

@@ -3,10 +3,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createProduct } from "../api.js";
 import { productSchema } from "../schemas.js";
+import { useAuth } from "./useAuth.js";
 
-// Lógica de crear un producto: formulario, validación, llamada a la API y refresco de la lista
-export function useCreateProduct(onUnauthorized) {
+export function useCreateProduct() {
   const queryClient = useQueryClient();
+  const { logout } = useAuth();
   const {
     register,
     handleSubmit,
@@ -21,8 +22,7 @@ export function useCreateProduct(onUnauthorized) {
       reset();
     },
     onError: (error) => {
-      // Si el token venció o es inválido, volvemos al login
-      if (error.status === 401) onUnauthorized();
+      if (error.status === 401) logout();
     },
   });
 
