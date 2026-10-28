@@ -1,14 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Pruebas end-to-end: abren el frontend en un navegador real y usan la app como una persona.
-//
-// Por defecto arrancan solas:
-//   1) un servidor de pruebas con los dos servicios reales (auth en :4000, catálogo en :3000)
-//      con bases de datos en memoria  -> tests/e2e/test-server.js
-//   2) el frontend con Vite en :5173
-//
-// Si ya tenés algo corriendo en esos puertos (por ejemplo `docker compose up`),
-// Playwright lo reutiliza y las pruebas corren contra el sistema real.
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.spec.js",
@@ -25,7 +16,7 @@ export default defineConfig({
   webServer: [
     {
       command: "node tests/e2e/test-server.js",
-      url: "http://localhost:3000/health",
+      url: "http://localhost:8080/health",
       reuseExistingServer: true,
       timeout: 30_000,
     },

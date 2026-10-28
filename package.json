@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "install:all": "npm install && npm --prefix auth-service install && npm --prefix catalog-service install && npm --prefix frontend install && npx playwright install chromium",
-    "test": "npm run test:services && npm run test:e2e",
-    "test:services": "npm --prefix auth-service test && npm --prefix catalog-service test",
+    "install:all": "npm install && npm --prefix gateway install && npm --prefix auth-service install && npm --prefix catalog-service install && npm --prefix frontend install && npx playwright install chromium",
+    "test": "npm run test:backend && npm run test:frontend && npm run test:e2e",
+    "test:backend": "npm --prefix gateway test && npm --prefix auth-service test && npm --prefix catalog-service test",
+    "test:frontend": "npm --prefix frontend test",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
