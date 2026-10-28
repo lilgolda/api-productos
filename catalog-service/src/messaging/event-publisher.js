@@ -1,9 +1,7 @@
 import amqp from "amqplib";
 import { logger } from "../shared/logger.js";
 
-// Publica eventos en RabbitMQ. Se conecta la primera vez que hace falta
-// y se reconecta solo si la conexión se cae.
-export function createEventPublisher({ url, exchange = "products" }) {
+export function createEventPublisher({ url, exchange = "eventos" }) {
   let channel = null;
   let connecting = null;
 
