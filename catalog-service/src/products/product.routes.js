@@ -34,11 +34,11 @@ export function createProductRouter(service) {
     res.json(await service.getById(req.params.id));
   });
 
-  router.put("/:id", validateId, validate, async (req, res) => {
+  router.put("/:id", requireAuth, validateId, validate, async (req, res) => {
     res.json(await service.update(req.params.id, req.body));
   });
 
-  router.delete("/:id", validateId, async (req, res) => {
+  router.delete("/:id", requireAuth, validateId, async (req, res) => {
     await service.remove(req.params.id);
     res.status(204).send();
   });

@@ -5,8 +5,6 @@ import { createApp } from "../src/app.js";
 import { createProductService } from "../src/products/product.service.js";
 import { createInMemoryProductRepository } from "./helpers/in-memory-product-repository.js";
 
-// Test de integración: request HTTP real contra la app completa
-// (rutas + validación Zod + JWT + servicio). Solo la base de datos y RabbitMQ están reemplazados.
 const token = jwt.sign({ username: "admin" }, process.env.JWT_SECRET, { expiresIn: "1h" });
 const auth = { Authorization: `Bearer ${token}` };
 const validProduct = { name: "Teclado", price: 45.5, stock: 10 };
@@ -59,7 +57,7 @@ describe("POST /products", () => {
     expect(res.body).toMatchObject(validProduct);
     expect(res.body._id).toBeDefined();
     expect(events.publish).toHaveBeenCalledWith(
-      "product.created",
+      "producto.creado",
       expect.objectContaining({ createdBy: "admin", name: "Teclado" })
     );
   });
@@ -110,34 +108,50 @@ describe("GET /products/:id", () => {
 describe("PUT /products/:id", () => {
   it("actualiza el producto", async () => {
     const created = await request(app).post("/products").set(auth).send(validProduct);
-    const res = await request(app).put(`/products/${created.body._id}`).send({ name: "Teclado mecánico", price: 60, stock: 8 });
+    const res = await request(app).put(`/products/${created.body._id}`).set(auth).send({ name: "Teclado mecánico", price: 60, stock: 8 });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ name: "Teclado mecánico", price: 60, stock: 8 });
   });
 
   it("responde 400 si el body es inválido", async () => {
     const created = await request(app).post("/products").set(auth).send(validProduct);
-    const res = await request(app).put(`/products/${created.body._id}`).send({ name: "", price: 1, stock: 1 });
+    const res = await request(app).put(`/products/${created.body._id}`).set(auth).send({ name: "", price: 1, stock: 1 });
     expect(res.status).toBe(400);
   });
 
   it("responde 404 si no existe", async () => {
-    const res = await request(app).put("/products/999").send(validProduct);
+    const res = await request(app).put("/products/999").set(auth).send(validProduct);
     expect(res.status).toBe(404);
+  });
+
+  it("responde 401 sin token y no modifica nada", async () => {
+    const created = await request(app).post("/products").set(auth).send(validProduct);
+    const res = await request(app).put(`/products/${created.body._id}`).send({ name: "Hackeado", price: 1, stock: 1 });
+    expect(res.status).toBe(401);
+    const get = await request(app).get(`/products/${created.body._id}`);
+    expect(get.body.name).toBe("Teclado");
   });
 });
 
 describe("DELETE /products/:id", () => {
   it("borra el producto (204) y después ya no existe", async () => {
     const created = await request(app).post("/products").set(auth).send(validProduct);
-    const del = await request(app).delete(`/products/${created.body._id}`);
+    const del = await request(app).delete(`/products/${created.body._id}`).set(auth);
     expect(del.status).toBe(204);
     const get = await request(app).get(`/products/${created.body._id}`);
     expect(get.status).toBe(404);
   });
 
   it("responde 404 si no existe", async () => {
-    const res = await request(app).delete("/products/999");
+    const res = await request(app).delete("/products/999").set(auth);
     expect(res.status).toBe(404);
+  });
+
+  it("responde 401 sin token y el producto sigue existiendo", async () => {
+    const created = await request(app).post("/products").set(auth).send(validProduct);
+    const res = await request(app).delete(`/products/${created.body._id}`);
+    expect(res.status).toBe(401);
+    const get = await request(app).get(`/products/${created.body._id}`);
+    expect(get.status).toBe(200);
   });
 });

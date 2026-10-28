@@ -1,4 +1,3 @@
-// Repositorio de productos en memoria: reemplaza a MongoDB en los tests de integración.
 export function createInMemoryProductRepository() {
   const items = new Map();
   let counter = 0;

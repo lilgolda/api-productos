@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createProductService } from "./product.service.js";
 import { NotFoundError } from "../shared/errors.js";
 
-// Test unitario: el caso de uso se prueba con repositorio, eventos y logger "mock".
-// No hay base de datos, ni RabbitMQ, ni Express.
 describe("product.service", () => {
   let repository;
   let events;
@@ -25,7 +23,7 @@ describe("product.service", () => {
   });
 
   describe("create", () => {
-    it("guarda el producto y publica el evento product.created", async () => {
+    it("guarda el producto y publica el evento producto.creado", async () => {
       const data = { name: "Teclado", price: 45.5, stock: 10 };
       repository.create.mockResolvedValue({ _id: "abc123", ...data });
 
@@ -34,7 +32,7 @@ describe("product.service", () => {
       expect(repository.create).toHaveBeenCalledWith(data);
       expect(product._id).toBe("abc123");
       expect(events.publish).toHaveBeenCalledWith(
-        "product.created",
+        "producto.creado",
         expect.objectContaining({ productId: "abc123", name: "Teclado", createdBy: "admin" })
       );
     });
@@ -50,7 +48,7 @@ describe("product.service", () => {
       expect(product.name).toBe("Mouse");
       expect(logger.error).toHaveBeenCalledWith(
         expect.objectContaining({ err: failure, productId: "m1" }),
-        "No se pudo publicar product.created"
+        "No se pudo publicar producto.creado"
       );
     });
 
