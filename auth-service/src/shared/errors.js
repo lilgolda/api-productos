@@ -1,4 +1,3 @@
-// Errores de negocio: no saben nada de HTTP ni de la base de datos.
 export class NotFoundError extends Error {
   constructor(message = "No encontrado") {
     super(message);
@@ -10,5 +9,12 @@ export class InvalidCredentialsError extends Error {
   constructor() {
     super("Credenciales inválidas");
     this.name = "InvalidCredentialsError";
+  }
+}
+
+export class ConflictError extends Error {
+  constructor(message = "Conflicto") {
+    super(message);
+    this.name = "ConflictError";
   }
 }
