@@ -29,7 +29,7 @@ services:
       retries: 10
       start_period: 10s
 
-  # Base de datos propia del catalog-service (productos)
+  # Base de datos propia del catalog-service (productos y usuarios conocidos)
   mongo-catalog:
     image: mongo:7
     volumes:
@@ -43,10 +43,9 @@ services:
       retries: 10
       start_period: 10s
 
+  # Los servicios NO publican puertos hacia afuera: solo se llega a ellos a través del gateway.
   auth-service:
     build: ./auth-service
-    ports:
-      - "4000:4000"
     environment:
       PORT: 4000
       MONGODB_URI: mongodb://mongo-auth:27017/auth_db
@@ -60,8 +59,6 @@ services:
 
   catalog-service:
     build: ./catalog-service
-    ports:
-      - "3000:3000"
     environment:
       PORT: 3000
       MONGODB_URI: mongodb://mongo-catalog:27017/catalog_db
@@ -73,17 +70,28 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # Única entrada para el frontend: /auth/* va al auth-service y /products/* al catalog-service
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      AUTH_SERVICE_URL: http://auth-service:4000
+      CATALOG_SERVICE_URL: http://catalog-service:3000
+    depends_on:
+      - auth-service
+      - catalog-service
+
   frontend:
     build:
       context: ./frontend
       args:
-        VITE_AUTH_URL: http://localhost:4000
-        VITE_API_URL: http://localhost:3000
+        VITE_API_URL: http://localhost:8080
     ports:
       - "5173:80"
     depends_on:
-      - auth-service
-      - catalog-service
+      - gateway
 
 volumes:
   mongo-auth-data:
