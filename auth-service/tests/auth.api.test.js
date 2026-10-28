@@ -1,16 +1,16 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { createAuthService } from "../src/auth/auth.service.js";
 import { createInMemoryUserRepository } from "./helpers/in-memory-user-repository.js";
 
-// Test de integración: request HTTP real contra la app completa
-// (rutas + validación Zod + JWT + bcrypt + servicio). Solo la base de datos está reemplazada.
 let app;
 let authService;
+let events;
 
 beforeEach(async () => {
-  authService = createAuthService(createInMemoryUserRepository());
+  events = { publish: vi.fn().mockResolvedValue(undefined) };
+  authService = createAuthService(createInMemoryUserRepository(), events, { error: vi.fn() });
   await authService.ensureDefaultUser();
   app = createApp({ authService });
 });
@@ -25,6 +25,38 @@ describe("GET /health", () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: "ok", service: "auth-service" });
+  });
+});
+
+describe("POST /register", () => {
+  it("crea el usuario (201), publica usuario.creado y ya puede iniciar sesión", async () => {
+    const res = await request(app).post("/register").send({ username: "ana", password: "secreto1" });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ username: "ana" });
+    expect(events.publish).toHaveBeenCalledWith("usuario.creado", expect.objectContaining({ username: "ana" }));
+
+    const login = await request(app).post("/login").send({ username: "ana", password: "secreto1" });
+    expect(login.status).toBe(200);
+    expect(login.body.token).toBeDefined();
+  });
+
+  it("responde 409 si el usuario ya existe", async () => {
+    await request(app).post("/register").send({ username: "ana", password: "secreto1" });
+    const res = await request(app).post("/register").send({ username: "ana", password: "otraclave" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("El usuario ya existe");
+  });
+
+  it("responde 400 si el usuario o la clave son muy cortos", async () => {
+    const res = await request(app).post("/register").send({ username: "an", password: "123" });
+    expect(res.status).toBe(400);
+    const campos = res.body.errors.map((e) => e.path[0]);
+    expect(campos).toEqual(expect.arrayContaining(["username", "password"]));
+  });
+
+  it("no deja registrar el usuario admin que ya existe", async () => {
+    const res = await request(app).post("/register").send({ username: "admin", password: "secreto1" });
+    expect(res.status).toBe(409);
   });
 });
 
@@ -71,10 +103,9 @@ describe("GET /me", () => {
     expect(res.body).toEqual({ username: "admin", productsCreated: 0 });
   });
 
-  it("el contador sube cuando llega el evento product.created", async () => {
+  it("el contador sube cuando llega el evento producto.creado", async () => {
     const token = await loginAsAdmin();
 
-    // Lo mismo que hace el consumidor de RabbitMQ al recibir el evento
     await authService.registerProductCreated("admin");
     await authService.registerProductCreated("admin");
 

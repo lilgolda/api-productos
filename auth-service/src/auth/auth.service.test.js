@@ -1,16 +1,17 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import bcrypt from "bcryptjs";
 import { createAuthService } from "./auth.service.js";
-import { InvalidCredentialsError, NotFoundError } from "../shared/errors.js";
+import { ConflictError, InvalidCredentialsError, NotFoundError } from "../shared/errors.js";
 
-// Test unitario: el caso de uso se prueba con un repositorio "mock". No hay base de datos.
 describe("auth.service", () => {
   let repository;
+  let events;
+  let logger;
   let service;
   let adminHash;
 
   beforeAll(async () => {
-    adminHash = await bcrypt.hash("1234", 4); // costo bajo: solo para que el test sea rápido
+    adminHash = await bcrypt.hash("1234", 4);
   });
 
   beforeEach(() => {
@@ -19,7 +20,9 @@ describe("auth.service", () => {
       create: vi.fn(),
       incrementProductsCreated: vi.fn(),
     };
-    service = createAuthService(repository);
+    events = { publish: vi.fn().mockResolvedValue(undefined) };
+    logger = { error: vi.fn() };
+    service = createAuthService(repository, events, logger);
   });
 
   describe("ensureDefaultUser", () => {
@@ -39,6 +42,54 @@ describe("auth.service", () => {
       repository.findByUsername.mockResolvedValue({ username: "admin" });
       await service.ensureDefaultUser();
       expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("register", () => {
+    it("guarda el usuario con la clave cifrada y publica usuario.creado", async () => {
+      repository.findByUsername.mockResolvedValue(null);
+
+      const result = await service.register({ username: "ana", password: "secreto1" });
+
+      expect(result).toEqual({ username: "ana" });
+      const saved = repository.create.mock.calls[0][0];
+      expect(saved.username).toBe("ana");
+      expect(saved.passwordHash).not.toBe("secreto1");
+      expect(await bcrypt.compare("secreto1", saved.passwordHash)).toBe(true);
+      expect(events.publish).toHaveBeenCalledWith(
+        "usuario.creado",
+        expect.objectContaining({ username: "ana" })
+      );
+    });
+
+    it("lanza ConflictError si el usuario ya existe y no publica nada", async () => {
+      repository.findByUsername.mockResolvedValue({ username: "ana" });
+
+      await expect(service.register({ username: "ana", password: "secreto1" })).rejects.toBeInstanceOf(ConflictError);
+      expect(repository.create).not.toHaveBeenCalled();
+      expect(events.publish).not.toHaveBeenCalled();
+    });
+
+    it("convierte el error de duplicado de la base de datos en ConflictError", async () => {
+      repository.findByUsername.mockResolvedValue(null);
+      repository.create.mockRejectedValue(Object.assign(new Error("duplicate key"), { code: 11000 }));
+
+      await expect(service.register({ username: "ana", password: "secreto1" })).rejects.toBeInstanceOf(ConflictError);
+      expect(events.publish).not.toHaveBeenCalled();
+    });
+
+    it("si RabbitMQ falla, el usuario igual se registra y el error se registra en el log", async () => {
+      repository.findByUsername.mockResolvedValue(null);
+      const failure = new Error("sin conexión");
+      events.publish.mockRejectedValue(failure);
+
+      const result = await service.register({ username: "ana", password: "secreto1" });
+
+      expect(result).toEqual({ username: "ana" });
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: failure, username: "ana" }),
+        "No se pudo publicar usuario.creado"
+      );
     });
   });
 

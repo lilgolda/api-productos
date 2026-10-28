@@ -1,4 +1,3 @@
-// Repositorio de usuarios en memoria: reemplaza a MongoDB en los tests de integración.
 export function createInMemoryUserRepository() {
   const users = new Map();
 
